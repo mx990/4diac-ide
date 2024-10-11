@@ -35,6 +35,7 @@ import org.eclipse.debug.core.model.IStreamsProxy;
 import org.eclipse.fordiac.ide.deployment.DeploymentCoordinator;
 import org.eclipse.fordiac.ide.deployment.DownloadRunnable;
 import org.eclipse.fordiac.ide.deployment.exceptions.DeploymentException;
+import org.eclipse.fordiac.ide.model.libraryElement.AutomationSystem;
 import org.eclipse.fordiac.ide.model.libraryElement.INamedElement;
 
 public class DeploymentProcess extends PlatformObject implements IProcess {
@@ -46,9 +47,9 @@ public class DeploymentProcess extends PlatformObject implements IProcess {
 	private final DownloadRunnable downloadRunnable;
 	private final Job job;
 
-	public DeploymentProcess(final String name, final Set<INamedElement> selection, final ILaunch launch)
+	public DeploymentProcess(final AutomationSystem system, final Set<INamedElement> selection, final ILaunch launch)
 			throws DeploymentException {
-		this.name = name;
+		this.name = MessageFormat.format(Messages.DeploymentProcess_Name, system.getName());
 		this.launch = launch;
 
 		downloadRunnable = new DownloadRunnable(DeploymentCoordinator.createDeploymentdata(selection.toArray()), null,
@@ -121,6 +122,10 @@ public class DeploymentProcess extends PlatformObject implements IProcess {
 	@Override
 	public IStreamsProxy getStreamsProxy() {
 		return streamsProxy;
+	}
+
+	public Job getJob() {
+		return job;
 	}
 
 	protected void fireCreationEvent() {
