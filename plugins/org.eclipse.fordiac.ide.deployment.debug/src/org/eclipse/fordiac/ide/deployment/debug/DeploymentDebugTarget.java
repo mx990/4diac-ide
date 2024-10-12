@@ -32,6 +32,7 @@ import org.eclipse.fordiac.ide.debug.EvaluatorDebugVariable;
 import org.eclipse.fordiac.ide.deployment.exceptions.DeploymentException;
 import org.eclipse.fordiac.ide.model.eval.variable.Variable;
 import org.eclipse.fordiac.ide.model.libraryElement.AutomationSystem;
+import org.eclipse.fordiac.ide.model.libraryElement.Device;
 import org.eclipse.fordiac.ide.model.libraryElement.INamedElement;
 
 public class DeploymentDebugTarget extends DeploymentDebugElement implements IDeploymentDebugTarget {
@@ -69,9 +70,14 @@ public class DeploymentDebugTarget extends DeploymentDebugElement implements IDe
 		}
 	}
 
-	protected void doConnect(final IProgressMonitor monitor) {
-		// TODO connect
-		thread.fireSuspendEvent(DebugEvent.CLIENT_REQUEST);
+	protected void doConnect(final IProgressMonitor monitor) throws DebugException {
+		try {
+			for (final Device device : system.getSystemConfiguration().getDevices()) {
+				new DeploymentDebugDevice(device, this, allowTerminate).connect();
+			}
+		} finally {
+			thread.fireSuspendEvent(DebugEvent.CLIENT_REQUEST);
+		}
 	}
 
 	public void start() {
