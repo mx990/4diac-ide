@@ -12,6 +12,8 @@
  *******************************************************************************/
 package org.eclipse.fordiac.ide.deployment.debug;
 
+import java.util.Map;
+
 import org.eclipse.fordiac.ide.debug.IEvaluatorDebugTarget;
 import org.eclipse.fordiac.ide.model.libraryElement.AutomationSystem;
 
@@ -26,4 +28,11 @@ public interface IDeploymentDebugTarget extends IEvaluatorDebugTarget {
 	 * @return The system
 	 */
 	AutomationSystem getSystem();
+
+	/**
+	 * Get the current watches
+	 *
+	 * @return The watches
+	 */
+	Map<String, IDeploymentDebugWatch> getWatches();
 }

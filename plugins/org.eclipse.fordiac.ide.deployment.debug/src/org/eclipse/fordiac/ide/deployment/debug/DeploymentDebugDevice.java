@@ -15,6 +15,7 @@ package org.eclipse.fordiac.ide.deployment.debug;
 import java.text.MessageFormat;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -23,24 +24,32 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.eclipse.core.resources.IMarkerDelta;
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.debug.core.DebugEvent;
 import org.eclipse.debug.core.DebugException;
+import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.model.IBreakpoint;
 import org.eclipse.debug.core.model.IMemoryBlock;
 import org.eclipse.debug.core.model.IProcess;
 import org.eclipse.debug.core.model.IThread;
 import org.eclipse.fordiac.ide.debug.EvaluatorDebugVariable;
+import org.eclipse.fordiac.ide.deployment.debug.breakpoint.DeploymentWatchpoint;
 import org.eclipse.fordiac.ide.deployment.devResponse.Resource;
+import org.eclipse.fordiac.ide.deployment.devResponse.Response;
 import org.eclipse.fordiac.ide.deployment.exceptions.DeploymentException;
 import org.eclipse.fordiac.ide.deployment.interactors.DeviceManagementInteractorFactory;
 import org.eclipse.fordiac.ide.deployment.interactors.IDeviceManagementExecutorService;
+import org.eclipse.fordiac.ide.model.eval.EvaluatorException;
 import org.eclipse.fordiac.ide.model.eval.variable.Variable;
 import org.eclipse.fordiac.ide.model.libraryElement.AutomationSystem;
 import org.eclipse.fordiac.ide.model.libraryElement.Device;
+import org.eclipse.fordiac.ide.model.libraryElement.INamedElement;
+import org.eclipse.fordiac.ide.ui.FordiacLogHelper;
 
 public class DeploymentDebugDevice extends DeploymentDebugElement implements IDeploymentDebugTarget {
 
@@ -49,6 +58,7 @@ public class DeploymentDebugDevice extends DeploymentDebugElement implements IDe
 	private final Duration pollingInterval;
 	private final IDeviceManagementExecutorService deviceManagementExecutor;
 	private final Map<String, DeploymentDebugResource> resources = new ConcurrentSkipListMap<>();
+	private final Map<String, IDeploymentDebugWatch> watches = new ConcurrentSkipListMap<>();
 	private final AtomicLong variableUpdateCount = new AtomicLong();
 
 	private boolean terminate;
@@ -63,11 +73,13 @@ public class DeploymentDebugDevice extends DeploymentDebugElement implements IDe
 		deviceManagementExecutor = IDeviceManagementExecutorService
 				.of(DeviceManagementInteractorFactory.INSTANCE.getDeviceManagementInteractor(device));
 
+		DebugPlugin.getDefault().getBreakpointManager().addBreakpointListener(this);
 		debugTarget.getLaunch().addDebugTarget(this);
 		fireCreationEvent();
 	}
 
 	protected void terminated() {
+		DebugPlugin.getDefault().getBreakpointManager().removeBreakpointListener(this);
 		fireTerminateEvent();
 	}
 
@@ -81,11 +93,22 @@ public class DeploymentDebugDevice extends DeploymentDebugElement implements IDe
 						.map(resource -> new DeploymentDebugResource(resource, this, allowTerminate)).orElse(null)));
 	}
 
+	protected void updateWatches(final Response response) {
+		incrementVariableUpdateCount();
+		final DeploymentDebugWatchData watchData = new DeploymentDebugWatchData(response);
+		watches.values().forEach(watch -> watch.updateValue(watchData));
+		getPrimaryDebugTarget().updateWatches(false);
+	}
+
 	public void connect() throws DebugException {
 		try {
 			deviceManagementExecutor.connect();
 			deviceManagementExecutor.queryResourcesPeriodically(this::updateResources,
 					pollingInterval.get(ChronoUnit.NANOS), TimeUnit.NANOSECONDS);
+			deviceManagementExecutor.readWatchesPeriodically(this::updateWatches, pollingInterval.get(ChronoUnit.NANOS),
+					TimeUnit.NANOSECONDS);
+			Stream.of(DebugPlugin.getDefault().getBreakpointManager().getBreakpoints())
+					.forEachOrdered(this::breakpointAdded);
 			fireChangeEvent(DebugEvent.STATE);
 		} catch (final DeploymentException e) {
 			throw new DebugException(Status
@@ -126,6 +149,11 @@ public class DeploymentDebugDevice extends DeploymentDebugElement implements IDe
 	}
 
 	@Override
+	public Map<String, IDeploymentDebugWatch> getWatches() {
+		return Collections.unmodifiableMap(watches);
+	}
+
+	@Override
 	public boolean canResume() {
 		return false;
 	}
@@ -152,22 +180,60 @@ public class DeploymentDebugDevice extends DeploymentDebugElement implements IDe
 
 	@Override
 	public boolean supportsBreakpoint(final IBreakpoint breakpoint) {
-		return false; // none yet
+		return breakpoint instanceof final DeploymentWatchpoint watchpoint && watchpoint.isRelevant(getSystem());
 	}
 
 	@Override
 	public void breakpointAdded(final IBreakpoint breakpoint) {
-		// do nothing
+		if (breakpoint instanceof final DeploymentWatchpoint watchpoint && watchpoint.isRelevant(getSystem())) {
+			final Optional<INamedElement> element = watchpoint.getTarget(getSystem());
+			if (element.isPresent()) {
+				try {
+					final IDeploymentDebugWatch watch = watches.computeIfAbsent(element.get().getQualifiedName(),
+							name -> IDeploymentDebugWatch.watchFor(name, element.get(), this));
+					getPrimaryDebugTarget().updateWatches(true);
+					watch.addWatch();
+					watchpoint.setInstalled(true);
+				} catch (CoreException | EvaluatorException e) {
+					FordiacLogHelper.logWarning("Cannot create watch for watchpoint: " + watchpoint, e); //$NON-NLS-1$
+				}
+			}
+		}
 	}
 
 	@Override
 	public void breakpointRemoved(final IBreakpoint breakpoint, final IMarkerDelta delta) {
-		// do nothing
+		if (breakpoint instanceof final DeploymentWatchpoint watchpoint && watchpoint.isRelevant(getSystem())) {
+			final IDeploymentDebugWatch watch = watches.remove(watchpoint.getLocation());
+			if (watch != null) {
+				try {
+					getPrimaryDebugTarget().updateWatches(true);
+					watch.removeWatch();
+				} catch (final DebugException e) {
+					FordiacLogHelper.logWarning("Cannot remove watch for watchpoint: " + watchpoint, e); //$NON-NLS-1$
+				}
+			}
+		}
 	}
 
 	@Override
 	public void breakpointChanged(final IBreakpoint breakpoint, final IMarkerDelta delta) {
-		// do nothing
+		if (breakpoint instanceof final DeploymentWatchpoint watchpoint && watchpoint.isRelevant(getSystem())
+				&& watchpoint.isForceChanged(delta)) {
+			final IDeploymentDebugWatch watch = watches.get(watchpoint.getLocation());
+			if (watch instanceof final DeploymentDebugVariableWatch variableWatch) {
+				try {
+					getPrimaryDebugTarget().updateWatches(false);
+					if (watchpoint.isForceEnabled()) {
+						variableWatch.forceValue(watchpoint.getForceValue());
+					} else {
+						variableWatch.clearForce();
+					}
+				} catch (final DebugException e) {
+					FordiacLogHelper.logWarning("Cannot update watch for watchpoint: " + watchpoint, e); //$NON-NLS-1$
+				}
+			}
+		}
 	}
 
 	@Override

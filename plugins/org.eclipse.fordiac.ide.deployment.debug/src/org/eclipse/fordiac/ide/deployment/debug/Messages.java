@@ -21,6 +21,9 @@ public class Messages extends NLS {
 	public static String DeploymentDebugDevice_DisconnectError;
 	public static String DeploymentDebugDevice_ReadWatchesError;
 	public static String DeploymentDebugDevice_TerminateError;
+	public static String DeploymentDebugEventWatch_AddError;
+	public static String DeploymentDebugEventWatch_RemoveError;
+	public static String DeploymentDebugEventWatch_TriggerEventError;
 	public static String DeploymentDebugResource_ResumeError;
 	public static String DeploymentDebugResource_SuspendError;
 	public static String DeploymentDebugResource_TerminateError;
@@ -31,6 +34,11 @@ public class Messages extends NLS {
 	public static String DeploymentLaunchConfigurationAttributes_AllowTerminate_Always;
 	public static String DeploymentLaunchConfigurationAttributes_AllowTerminate_DebugOnly;
 	public static String DeploymentLaunchConfigurationAttributes_AllowTerminate_Never;
+	public static String DeploymentDebugVariableWatch_AddError;
+	public static String DeploymentDebugVariableWatch_ClearForceError;
+	public static String DeploymentDebugVariableWatch_ForceError;
+	public static String DeploymentDebugVariableWatch_RemoveError;
+	public static String DeploymentDebugVariableWatch_WriteError;
 	public static String DeploymentLaunchConfigurationDelegate_CannotFindSystem;
 	public static String DeploymentLaunchConfigurationDelegate_DeploymentError;
 	public static String DeploymentLaunchConfigurationDelegate_IllegalLaunchMode;

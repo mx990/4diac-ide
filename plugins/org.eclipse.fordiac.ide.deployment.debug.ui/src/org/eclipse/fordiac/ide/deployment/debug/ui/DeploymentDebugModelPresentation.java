@@ -19,11 +19,38 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.debug.ui.DebugUITools;
 import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.fordiac.ide.debug.ui.EvaluatorDebugModelPresentation;
+import org.eclipse.fordiac.ide.deployment.debug.DeploymentDebugVariableWatch;
 import org.eclipse.fordiac.ide.deployment.debug.IDeploymentDebugTarget;
+import org.eclipse.fordiac.ide.deployment.debug.IDeploymentDebugWatch;
 import org.eclipse.fordiac.ide.deployment.debug.breakpoint.DeploymentWatchpoint;
+import org.eclipse.jface.resource.JFaceResources;
+import org.eclipse.jface.viewers.IColorProvider;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Image;
 
-public class DeploymentDebugModelPresentation extends EvaluatorDebugModelPresentation {
+public class DeploymentDebugModelPresentation extends EvaluatorDebugModelPresentation implements IColorProvider {
+
+	public static final String FORCE_COLOR = "org.eclipse.fordiac.ide.deployment.debug.ui.forceColor"; //$NON-NLS-1$
+	public static final String WATCH_COLOR = "org.eclipse.fordiac.ide.deployment.debug.ui.watchColor"; //$NON-NLS-1$
+	public static final String WATCH_ERROR_COLOR = "org.eclipse.fordiac.ide.deployment.debug.ui.watchErrorColor"; //$NON-NLS-1$
+
+	@Override
+	public Color getForeground(final Object element) {
+		return null;
+	}
+
+	@Override
+	public Color getBackground(final Object element) {
+		if (element instanceof final IDeploymentDebugWatch watch) {
+			if (!watch.isAlive()) {
+				return getWatchErrorColor();
+			}
+			if (element instanceof final DeploymentDebugVariableWatch variableWatch && variableWatch.isForced()) {
+				return getForceColor();
+			}
+		}
+		return null;
+	}
 
 	@Override
 	public Image getImage(final Object element) {
@@ -78,5 +105,17 @@ public class DeploymentDebugModelPresentation extends EvaluatorDebugModelPresent
 		}
 		return MessageFormat.format(Messages.DeploymentDebugModelPresentation_WatchpointText, resource.getName(),
 				location);
+	}
+
+	public static Color getForceColor() {
+		return JFaceResources.getColorRegistry().get(FORCE_COLOR);
+	}
+
+	public static Color getWatchColor() {
+		return JFaceResources.getColorRegistry().get(WATCH_COLOR);
+	}
+
+	public static Color getWatchErrorColor() {
+		return JFaceResources.getColorRegistry().get(WATCH_ERROR_COLOR);
 	}
 }
