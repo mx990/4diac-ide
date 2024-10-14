@@ -13,6 +13,7 @@
 package org.eclipse.fordiac.ide.deployment.debug;
 
 import java.text.MessageFormat;
+import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -40,6 +41,7 @@ public class DeploymentDebugTarget extends DeploymentDebugElement implements IDe
 	private final ILaunch launch;
 	private final AutomationSystem system;
 	private final boolean allowTerminate;
+	private final Duration pollingInterval;
 
 	private final DeploymentProcess process;
 	private final DeploymentDebugThread thread;
@@ -49,11 +51,13 @@ public class DeploymentDebugTarget extends DeploymentDebugElement implements IDe
 	private boolean disconnected;
 
 	public DeploymentDebugTarget(final AutomationSystem system, final Set<INamedElement> selection,
-			final ILaunch launch, final boolean allowTerminate) throws DeploymentException {
+			final ILaunch launch, final boolean allowTerminate, final Duration pollingInterval)
+			throws DeploymentException {
 		super(null);
 		this.launch = launch;
 		this.system = system;
 		this.allowTerminate = allowTerminate;
+		this.pollingInterval = pollingInterval;
 		process = new DeploymentProcess(system, selection, launch);
 		process.getJob().addJobChangeListener(IJobChangeListener.onDone(this::deploymentDone));
 		thread = new DeploymentDebugThread(this);
@@ -73,7 +77,7 @@ public class DeploymentDebugTarget extends DeploymentDebugElement implements IDe
 	protected void doConnect(final IProgressMonitor monitor) throws DebugException {
 		try {
 			for (final Device device : system.getSystemConfiguration().getDevices()) {
-				new DeploymentDebugDevice(device, this, allowTerminate).connect();
+				new DeploymentDebugDevice(device, this, allowTerminate, pollingInterval).connect();
 			}
 		} finally {
 			thread.fireSuspendEvent(DebugEvent.CLIENT_REQUEST);
@@ -161,6 +165,10 @@ public class DeploymentDebugTarget extends DeploymentDebugElement implements IDe
 	@Override
 	public AutomationSystem getSystem() {
 		return system;
+	}
+
+	public Duration getPollingInterval() {
+		return pollingInterval;
 	}
 
 	public boolean isAllowTerminate() {
