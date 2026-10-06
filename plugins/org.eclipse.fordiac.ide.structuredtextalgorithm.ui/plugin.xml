@@ -634,6 +634,12 @@
     </module>
  </extension>
  <extension
+       point="org.eclipse.xtext.ui.shared.overridingGuiceModule">
+    <module
+          class="org.eclipse.fordiac.ide.structuredtextalgorithm.ui.STAlgorithmSharedOverrideModule">
+    </module>
+ </extension>
+ <extension
        point="org.eclipse.xtext.builder.participant">
     <participant
           class="org.eclipse.fordiac.ide.structuredtextalgorithm.ui.STAlgorithmExecutableExtensionFactory:org.eclipse.fordiac.ide.structuredtextalgorithm.ui.builder.STAlgorithmInitialValueBuilderParticipant">
